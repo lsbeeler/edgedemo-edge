@@ -1,8 +1,6 @@
-package org.hazelcast.iotdemo;
+package org.hazelcast.edgedemo_edge;
 
 
-import com.hazelcast.jet.Jet;
-import com.hazelcast.jet.JetInstance;
 import com.hazelcast.jet.aggregate.AggregateOperations;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.pipeline.*;

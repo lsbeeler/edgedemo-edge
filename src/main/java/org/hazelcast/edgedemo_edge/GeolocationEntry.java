@@ -1,4 +1,4 @@
-package org.hazelcast.iotdemo;
+package org.hazelcast.edgedemo_edge;
 
 
 import java.util.Map;
