@@ -1,6 +1,7 @@
 package org.hazelcast.edgedemo_edge;
 
 
+import com.hazelcast.client.config.ClientConfig;
 import com.hazelcast.jet.aggregate.AggregateOperations;
 import com.hazelcast.jet.config.JobConfig;
 import com.hazelcast.jet.pipeline.*;
@@ -51,9 +52,18 @@ public final class JetLauncher implements Serializable
         return amcpDataSource;
     }
 
-    public static void launch(String inputCSVPath)
+    public static void launch(String inputCSVPath, String remoteIMDGAddr)
     {
+        // Create the stream source from the bundled AMCP data set CSV
+        // file
         StreamSource<DataPoint> amcpDataSource = createSource(inputCSVPath);
+
+        // Prepare a Hazelcast IMDG client configuration object that points to
+        // an IMDG instance in a remote data center. We will drain our
+        // transformed streams to Map data structures in this remote IMDG
+        // instance.
+        ClientConfig imdgClientConfig = new ClientConfig( );
+        imdgClientConfig.getNetworkConfig().addAddress(remoteIMDGAddr);
 
         Pipeline p = Pipeline.create( );
 
@@ -82,7 +92,8 @@ public final class JetLauncher implements Serializable
         geolocationFork
                 .map(pt -> new GeolocationEntry(pt.getDriverId( ),
                         new GeolocationCoordinates(pt)))
-                .drainTo(Sinks.map(AppConfiguration.COORDINATES_MAP));
+                .drainTo(Sinks.remoteMap(AppConfiguration.COORDINATES_MAP,
+                        imdgClientConfig));
 
         // Handle the policy violation detection fork
         violationDetectionFork
@@ -90,7 +101,8 @@ public final class JetLauncher implements Serializable
                 .filter(DataPointPolicyWrapper::isPolicyViolation)
                 .groupingKey(wrapper -> wrapper.getDataPoint( ).getDriverId( ))
                 .rollingAggregate(AggregateOperations.counting( ))
-                .drainTo(Sinks.map(AppConfiguration.VIOLATIONS_MAP));
+                .drainTo(Sinks.remoteMap(AppConfiguration.VIOLATIONS_MAP,
+                        imdgClientConfig));
 
         // Handle the average speed fork
         averageSpeedFork
@@ -98,7 +110,8 @@ public final class JetLauncher implements Serializable
                 .window(WindowDefinition.sliding(30000, 3000))
                 .aggregate(AggregateOperations.averagingDouble(
                         DataPoint::getSpeed))
-                .drainTo(Sinks.map(AppConfiguration.AVERAGE_SPEED_MAP));
+                .drainTo(Sinks.remoteMap(AppConfiguration.AVERAGE_SPEED_MAP,
+                        imdgClientConfig));
 
         try {
             AppConfiguration.JET_INSTANCE.newJob(p, configureJob( )).join( );
